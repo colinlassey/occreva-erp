@@ -1,0 +1,378 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WorkspaceRole {
+  ADMIN
+  FINANCE
+  PM
+  TEAM_MEMBER
+  CLIENT
+}
+
+enum ProjectStatus {
+  PLANNED
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+enum DeliverableStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  APPROVED
+  SENT
+  PAID
+  VOID
+}
+
+enum LineItemType {
+  TIME
+  FIXED_FEE
+  EXPENSE
+}
+
+enum CommunicationType {
+  NOTE
+  EMAIL
+  PORTAL_MESSAGE
+}
+
+model Workspace {
+  id         String   @id @default(cuid())
+  name       String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  created_by String?
+  updated_by String?
+  deleted_at DateTime?
+
+  user_workspaces      UserWorkspace[]
+  client_accounts      ClientAccount[]
+  projects             Project[]
+  tasks                Task[]
+  deliverables         Deliverable[]
+  time_entries         TimeEntry[]
+  invoices             Invoice[]
+  invoice_line_items   InvoiceLineItem[]
+  payments             Payment[]
+  contacts             Contact[]
+  communication_events CommunicationEvent[]
+  audit_logs           AuditLog[]
+}
+
+model User {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  name       String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  created_by String?
+  updated_by String?
+  deleted_at DateTime?
+
+  user_workspaces UserWorkspace[]
+}
+
+model UserWorkspace {
+  id           String        @id @default(cuid())
+  workspace_id String
+  user_id       String
+  role          WorkspaceRole
+  created_at    DateTime      @default(now())
+  updated_at    DateTime      @updatedAt
+  created_by    String?
+  updated_by    String?
+  deleted_at    DateTime?
+
+  workspace Workspace @relation(fields: [workspace_id], references: [id])
+  user      User      @relation(fields: [user_id], references: [id])
+
+  @@unique([workspace_id, user_id])
+  @@index([workspace_id, role])
+}
+
+model ClientAccount {
+  id         String   @id @default(cuid())
+  workspace_id String
+  name       String
+  status     String
+  owner_id   String?
+  tags       String[] @default([])
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  created_by String?
+  updated_by String?
+  deleted_at DateTime?
+
+  workspace Workspace @relation(fields: [workspace_id], references: [id])
+  contacts  Contact[]
+  projects  Project[]
+  invoices  Invoice[]
+
+  @@index([workspace_id, status])
+}
+
+model Contact {
+  id                String   @id @default(cuid())
+  workspace_id      String
+  client_account_id String
+  name              String
+  email             String
+  phone             String?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+  created_by        String?
+  updated_by        String?
+  deleted_at        DateTime?
+
+  workspace      Workspace     @relation(fields: [workspace_id], references: [id])
+  client_account ClientAccount @relation(fields: [client_account_id], references: [id])
+
+  @@index([workspace_id, email])
+  @@index([client_account_id])
+}
+
+model Project {
+  id                String        @id @default(cuid())
+  workspace_id      String
+  client_account_id String
+  name              String
+  status            ProjectStatus @default(PLANNED)
+  budget_type       String
+  start_date        DateTime?
+  end_date          DateTime?
+  due_date          DateTime?
+  created_at        DateTime      @default(now())
+  updated_at        DateTime      @updatedAt
+  created_by        String?
+  updated_by        String?
+  deleted_at        DateTime?
+
+  workspace      Workspace     @relation(fields: [workspace_id], references: [id])
+  client_account ClientAccount @relation(fields: [client_account_id], references: [id])
+  members        ProjectMember[]
+  tasks          Task[]
+  deliverables   Deliverable[]
+  time_entries   TimeEntry[]
+
+  @@index([workspace_id, client_account_id, status])
+  @@index([workspace_id, due_date])
+}
+
+model ProjectMember {
+  id         String   @id @default(cuid())
+  workspace_id String
+  project_id String
+  user_id    String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  created_by String?
+  updated_by String?
+  deleted_at DateTime?
+
+  workspace Workspace @relation(fields: [workspace_id], references: [id])
+  project   Project   @relation(fields: [project_id], references: [id])
+
+  @@unique([project_id, user_id])
+  @@index([workspace_id, user_id])
+}
+
+model Task {
+  id             String     @id @default(cuid())
+  workspace_id   String
+  project_id     String
+  deliverable_id String?
+  title          String
+  status         TaskStatus @default(TODO)
+  priority       Int        @default(0)
+  due_date       DateTime?
+  assignee_id    String?
+  created_at     DateTime   @default(now())
+  updated_at     DateTime   @updatedAt
+  created_by     String?
+  updated_by     String?
+  deleted_at     DateTime?
+
+  workspace   Workspace    @relation(fields: [workspace_id], references: [id])
+  project     Project      @relation(fields: [project_id], references: [id])
+  deliverable Deliverable? @relation(fields: [deliverable_id], references: [id])
+  time_entries TimeEntry[]
+
+  @@index([workspace_id, project_id, status])
+  @@index([workspace_id, due_date])
+}
+
+model Deliverable {
+  id                  String            @id @default(cuid())
+  workspace_id        String
+  project_id          String
+  title               String
+  acceptance_criteria String?
+  status              DeliverableStatus @default(DRAFT)
+  version_link        String?
+  created_at          DateTime          @default(now())
+  updated_at          DateTime          @updatedAt
+  created_by          String?
+  updated_by          String?
+  deleted_at          DateTime?
+
+  workspace Workspace @relation(fields: [workspace_id], references: [id])
+  project   Project   @relation(fields: [project_id], references: [id])
+  tasks     Task[]
+
+  @@index([workspace_id, project_id, status])
+}
+
+model TimeEntry {
+  id           String   @id @default(cuid())
+  workspace_id String
+  user_id      String
+  project_id   String
+  task_id      String?
+  date         DateTime
+  duration_min Int
+  notes        String?
+  billable     Boolean  @default(true)
+  approved     Boolean  @default(false)
+  locked       Boolean  @default(false)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  created_by   String?
+  updated_by   String?
+  deleted_at   DateTime?
+
+  workspace Workspace @relation(fields: [workspace_id], references: [id])
+  project   Project   @relation(fields: [project_id], references: [id])
+  task      Task?     @relation(fields: [task_id], references: [id])
+  line_items InvoiceLineItem[]
+
+  @@index([workspace_id, project_id, user_id])
+  @@index([workspace_id, date])
+}
+
+model Invoice {
+  id                String        @id @default(cuid())
+  workspace_id      String
+  client_account_id String
+  invoice_number    String
+  issue_date        DateTime
+  due_date          DateTime
+  status            InvoiceStatus @default(DRAFT)
+  currency          String        @default("USD")
+  subtotal_cents    Int           @default(0)
+  tax_cents         Int           @default(0)
+  discount_cents    Int           @default(0)
+  total_cents       Int           @default(0)
+  created_at        DateTime      @default(now())
+  updated_at        DateTime      @updatedAt
+  created_by        String?
+  updated_by        String?
+  deleted_at        DateTime?
+
+  workspace      Workspace         @relation(fields: [workspace_id], references: [id])
+  client_account ClientAccount     @relation(fields: [client_account_id], references: [id])
+  line_items     InvoiceLineItem[]
+  payments       Payment[]
+
+  @@unique([workspace_id, invoice_number])
+  @@index([workspace_id, client_account_id, status])
+  @@index([workspace_id, due_date])
+}
+
+model InvoiceLineItem {
+  id             String       @id @default(cuid())
+  workspace_id   String
+  invoice_id     String
+  time_entry_id  String?
+  type           LineItemType
+  description    String
+  quantity       Decimal      @db.Decimal(10, 2)
+  unit_amount_cents Int
+  total_cents    Int
+  created_at     DateTime     @default(now())
+  updated_at     DateTime     @updatedAt
+  created_by     String?
+  updated_by     String?
+  deleted_at     DateTime?
+
+  workspace  Workspace  @relation(fields: [workspace_id], references: [id])
+  invoice    Invoice    @relation(fields: [invoice_id], references: [id])
+  time_entry TimeEntry? @relation(fields: [time_entry_id], references: [id])
+
+  @@index([workspace_id, invoice_id])
+}
+
+model Payment {
+  id           String   @id @default(cuid())
+  workspace_id String
+  invoice_id   String
+  amount_cents Int
+  paid_at      DateTime
+  reference    String?
+  provider_ref String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  created_by   String?
+  updated_by   String?
+  deleted_at   DateTime?
+
+  workspace Workspace @relation(fields: [workspace_id], references: [id])
+  invoice   Invoice   @relation(fields: [invoice_id], references: [id])
+
+  @@index([workspace_id, invoice_id, paid_at])
+}
+
+model CommunicationEvent {
+  id               String            @id @default(cuid())
+  workspace_id     String
+  client_account_id String?
+  project_id       String?
+  type             CommunicationType
+  content          String
+  client_visible   Boolean           @default(false)
+  created_at       DateTime          @default(now())
+  updated_at       DateTime          @updatedAt
+  created_by       String?
+  updated_by       String?
+  deleted_at       DateTime?
+
+  workspace Workspace @relation(fields: [workspace_id], references: [id])
+
+  @@index([workspace_id, client_account_id])
+  @@index([workspace_id, project_id])
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  workspace_id  String
+  actor_user_id String?
+  entity_type   String
+  entity_id     String
+  action        String
+  metadata      Json
+  created_at    DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspace_id], references: [id])
+
+  @@index([workspace_id, entity_type, entity_id])
+  @@index([workspace_id, created_at])
+}
