@@ -7,6 +7,14 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum WorkspaceRole {
+  ADMIN
+  FINANCE
+  PM
+  TEAM_MEMBER
+  CLIENT
+}
+
 enum ProjectStatus {
   DRAFT
   ACTIVE
@@ -58,7 +66,6 @@ model Workspace {
   deleted_at DateTime?
 
   users                UserWorkspace[]
-  roles                Role[]
   clients              ClientAccount[]
   projects             Project[]
   tasks                Task[]
@@ -92,40 +99,21 @@ model User {
 }
 
 model UserWorkspace {
-  id           String   @id @default(cuid())
+  id           String        @id @default(cuid())
   workspace_id String
   user_id      String
-  role_id      String
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
+  role         WorkspaceRole
+  created_at   DateTime      @default(now())
+  updated_at   DateTime      @updatedAt
   created_by   String
   updated_by   String
   deleted_at   DateTime?
 
   workspace Workspace @relation(fields: [workspace_id], references: [id])
   user      User      @relation(fields: [user_id], references: [id])
-  role      Role      @relation(fields: [role_id], references: [id])
 
   @@unique([workspace_id, user_id])
-  @@index([workspace_id, role_id])
-}
-
-model Role {
-  id           String   @id @default(cuid())
-  workspace_id String
-  code         String
-  name         String
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
-  created_by   String
-  updated_by   String
-  deleted_at   DateTime?
-
-  workspace Workspace       @relation(fields: [workspace_id], references: [id])
-  users     UserWorkspace[]
-
-  @@unique([workspace_id, code])
-  @@index([workspace_id])
+  @@index([workspace_id, role])
 }
 
 model ClientAccount {
